@@ -1,26 +1,276 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Slide Presenter with Pen + PDF Export</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      background: #111;
+    }
+
+    .slider-container {
+      position: relative;
+      width: 100%;
+      height: 90vh;
+      background: #000;
+      overflow: hidden;
+    }
+
+    .slide {
+      display: none;
+      width: 100%;
+      height: 100%;
+    }
+
+    .slide img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .active {
+      display: block;
+    }
+
+    #drawCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 10;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    .controls, .upload-area {
+      text-align: center;
+      padding: 10px;
+      background: #222;
+      color: white;
+    }
+
+    button {
+      margin: 0 5px;
+      padding: 8px 16px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    input[type="file"] {
+      margin-top: 10px;
+    }
+
+    #slideCounter {
+      margin-top: 8px;
+      font-size: 16px;
+      color: #ccc;
+    }
+  </style>
+</head>
 <body>
 
-<h2>The kbd Element</h2>
+  <div class="slider-container" id="slider">
+    <!-- Slides go here -->
+    <canvas id="drawCanvas"></canvas>
+  </div>
 
-<p>The kbd element is used to define keyboard input:</p>
+  <div class="controls">
+    <button onclick="prevSlide()">⬅️ Prev</button>
+    <button onclick="nextSlide()">Next ➡️</button>
+    <button onclick="deleteSlide()">🗑️ Delete Slide</button>
+    <button onclick="clearCanvas()">🧽 Clear Drawing</button>
+    <button onclick="saveAsPDF()">📄 Save PDF</button>
+    <div id="slideCounter">Slide 0 of 0</div>
+   <div id="slideCounter">This tool was Designed & Developed by Dr S Venu Gopal</div>
+  </div>
 
-<p>Save the document by pressing <kbd>Ctrl + S</kbd></p>
-  Hiiiii@@@@
-<script>
-  window.watsonAssistantChatOptions = {
-    integrationID: "6633c92c-e0ea-498f-b563-86bab5ce5181", // The ID of this integration.
-    region: "au-syd", // The region your integration is hosted in.
-    serviceInstanceID: "9da404bd-e983-4443-bff9-1d010b54f82b", // The ID of your service instance.
-    onLoad: function(instance) { instance.render(); }
-  };
-  setTimeout(function(){
-    const t=document.createElement('script');
-    t.src="https://web-chat.global.assistant.watson.appdomain.cloud/versions/" + (window.watsonAssistantChatOptions.clientVersion || 'latest') + "/WatsonAssistantChatEntry.js";
-    document.head.appendChild(t);
-  });
-</script>
-  
+  <div class="upload-area">
+    <input type="file" id="upload" accept="image/*">
+    <button onclick="addSlide()">➕ Add Slide</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <script>
+    const slider = document.getElementById('slider');
+    const uploadInput = document.getElementById('upload');
+    const canvas = document.getElementById('drawCanvas');
+    const ctx = canvas.getContext('2d');
+    const slideCounter = document.getElementById('slideCounter');
+
+    let slides = [];
+    let currentIndex = -1;
+
+    function resizeCanvas() {
+      canvas.width = slider.clientWidth;
+      canvas.height = slider.clientHeight;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function updateSlideCounter() {
+      slideCounter.innerText = slides.length > 0 ?
+        `Slide ${currentIndex + 1} of ${slides.length}` : 'Slide 0 of 0';
+    }
+
+    function showSlide(index) {
+      const allSlides = document.querySelectorAll('.slide');
+      allSlides.forEach((slide, i) => {
+        slide.classList.remove('active');
+        if (i === index) slide.classList.add('active');
+      });
+      clearCanvas();
+      updateSlideCounter();
+    }
+
+    function nextSlide() {
+      if (slides.length === 0) return;
+      currentIndex = (currentIndex + 1) % slides.length;
+      showSlide(currentIndex);
+    }
+
+    function prevSlide() {
+      if (slides.length === 0) return;
+      currentIndex = (currentIndex - 1 + slides.length) % slides.length;
+      showSlide(currentIndex);
+    }
+
+    function addSlide() {
+      const file = uploadInput.files[0];
+      if (!file) {
+        alert("Please upload an image first.");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const newSlide = document.createElement('div');
+        newSlide.className = 'slide';
+        newSlide.innerHTML = `<img src="${e.target.result}" alt="Slide Image">`;
+        slider.insertBefore(newSlide, canvas);
+        slides.push(newSlide);
+        currentIndex = slides.length - 1;
+        showSlide(currentIndex);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function deleteSlide() {
+      if (slides.length === 0) return;
+
+      const slideToRemove = slides[currentIndex];
+      slider.removeChild(slideToRemove);
+      slides.splice(currentIndex, 1);
+
+      currentIndex = slides.length ? currentIndex % slides.length : -1;
+      showSlide(currentIndex);
+    }
+
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // 🖊️ Drawing logic
+    let isDrawing = false;
+    let lastX = 0, lastY = 0;
+
+    function getPointerPos(e) {
+      if (e.touches) {
+        return {
+          x: e.touches[0].clientX - canvas.getBoundingClientRect().left,
+          y: e.touches[0].clientY - canvas.getBoundingClientRect().top
+        };
+      } else {
+        return {
+          x: e.clientX - canvas.getBoundingClientRect().left,
+          y: e.clientY - canvas.getBoundingClientRect().top
+        };
+      }
+    }
+
+    function startDraw(e) {
+      isDrawing = true;
+      const pos = getPointerPos(e);
+      lastX = pos.x;
+      lastY = pos.y;
+    }
+
+    function draw(e) {
+      if (!isDrawing) return;
+      e.preventDefault();
+      const pos = getPointerPos(e);
+      ctx.strokeStyle = 'red';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+
+      lastX = pos.x;
+      lastY = pos.y;
+    }
+
+    function stopDraw() {
+      isDrawing = false;
+    }
+
+    canvas.addEventListener('mousedown', startDraw);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDraw);
+    canvas.addEventListener('mouseleave', stopDraw);
+
+    canvas.addEventListener('touchstart', startDraw);
+    canvas.addEventListener('touchmove', draw);
+    canvas.addEventListener('touchend', stopDraw);
+    canvas.addEventListener('touchcancel', stopDraw);
+
+    // 📄 Save as PDF
+    async function saveAsPDF() {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "px",
+        format: [canvas.width, canvas.height]
+      });
+
+      for (let i = 0; i < slides.length; i++) {
+        currentIndex = i;
+        showSlide(i);
+
+        await new Promise(r => setTimeout(r, 500)); // wait for rendering
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        // Draw image
+        const img = slides[i].querySelector('img');
+        const imgEl = new Image();
+        imgEl.src = img.src;
+        await new Promise(resolve => imgEl.onload = resolve);
+        tempCtx.drawImage(imgEl, 0, 0, canvas.width, canvas.height);
+
+        // Draw annotations
+        tempCtx.drawImage(canvas, 0, 0);
+
+        if (i !== 0) pdf.addPage();
+        pdf.addImage(tempCanvas.toDataURL("image/png"), "PNG", 0, 0, canvas.width, canvas.height);
+      }
+
+      pdf.save("presentation.pdf");
+    }
+  </script>
+
 </body>
 </html>
