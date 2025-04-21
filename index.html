@@ -1,24 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Slide Presenter with Pen + PDF Export</title>
+  <meta charset="UTF-8" />
+  <title>Slide Presenter - Right Side Controls</title>
   <style>
     * { box-sizing: border-box; }
 
-    body, html {
+    html, body {
       margin: 0;
       padding: 0;
       height: 100%;
       font-family: Arial, sans-serif;
       background: #111;
+      color: white;
+    }
+
+    #app {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
     }
 
     .slider-container {
+      flex: 1;
       position: relative;
-      width: 100%;
-      height: 90vh;
-      background: #000;
+      background: black;
       overflow: hidden;
     }
 
@@ -32,7 +38,6 @@
       width: 100%;
       height: 100%;
       object-fit: contain;
-      display: block;
     }
 
     .active {
@@ -43,61 +48,69 @@
       position: absolute;
       top: 0;
       left: 0;
-      z-index: 10;
       width: 100%;
       height: 100%;
+      z-index: 10;
       cursor: crosshair;
     }
 
-    .controls, .upload-area {
-      text-align: center;
-      padding: 10px;
-      background: #222;
-      color: white;
+    .developer-photo {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 2px solid white;
+      z-index: 11;
+      opacity: 0.85;
     }
 
-    button {
-      margin: 0 5px;
-      padding: 8px 16px;
-      font-size: 16px;
+    .sidebar {
+      width: 200px;
+      background-color: #222;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .sidebar button, .sidebar input {
+      padding: 10px;
+      font-size: 14px;
       cursor: pointer;
     }
 
-    input[type="file"] {
-      margin-top: 10px;
-    }
-
     #slideCounter {
-      margin-top: 8px;
-      font-size: 16px;
+      margin-top: 10px;
+      text-align: center;
+      font-size: 14px;
       color: #ccc;
     }
   </style>
 </head>
 <body>
 
-  <div class="slider-container" id="slider">
-    <!-- Slides go here -->
-    <canvas id="drawCanvas"></canvas>
-  </div>
+  <div id="app">
+    <div class="slider-container" id="slider">
+      <canvas id="drawCanvas"></canvas>
+      <img src="https://i.imgur.com/NpHhl5B.png" class="developer-photo" alt="Dev Photo">
+    </div>
 
-  <div class="controls">
-    <button onclick="prevSlide()">⬅️ Prev</button>
-    <button onclick="nextSlide()">Next ➡️</button>
-    <button onclick="deleteSlide()">🗑️ Delete Slide</button>
-    <button onclick="clearCanvas()">🧽 Clear Drawing</button>
-    <button onclick="saveAsPDF()">📄 Save PDF</button>
-    <div id="slideCounter">Slide 0 of 0</div>
-   <div id="slideCounter">This tool was Designed & Developed by Dr S Venu Gopal</div>
-  </div>
-
-  <div class="upload-area">
-    <input type="file" id="upload" accept="image/*">
-    <button onclick="addSlide()">➕ Add Slide</button>
+    <div class="sidebar">
+      <button onclick="prevSlide()">⬅️ Prev Slide</button>
+      <button onclick="nextSlide()">Next Slide ➡️</button>
+      <button onclick="deleteSlide()">🗑️ Delete Slide</button>
+      <input type="file" id="upload" accept="image/*">
+      <button onclick="addSlide()">➕ Add Slide</button>
+      <button onclick="clearCanvas()">🧽 Clear Drawing</button>
+      <button onclick="saveAsPDF()">📄 Save PDF</button>
+      <div id="slideCounter">Slide 0 of 0</div>
+    </div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
   <script>
     const slider = document.getElementById('slider');
     const uploadInput = document.getElementById('upload');
@@ -178,7 +191,7 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
-    // 🖊️ Drawing logic
+    // Drawing
     let isDrawing = false;
     let lastX = 0, lastY = 0;
 
@@ -234,7 +247,6 @@
     canvas.addEventListener('touchend', stopDraw);
     canvas.addEventListener('touchcancel', stopDraw);
 
-    // 📄 Save as PDF
     async function saveAsPDF() {
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({
@@ -243,26 +255,28 @@
         format: [canvas.width, canvas.height]
       });
 
+      const devImg = new Image();
+      devImg.src = document.querySelector('.developer-photo').src;
+      await new Promise(resolve => devImg.onload = resolve);
+
       for (let i = 0; i < slides.length; i++) {
         currentIndex = i;
         showSlide(i);
-
-        await new Promise(r => setTimeout(r, 500)); // wait for rendering
+        await new Promise(r => setTimeout(r, 300));
 
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
         const tempCtx = tempCanvas.getContext('2d');
 
-        // Draw image
         const img = slides[i].querySelector('img');
         const imgEl = new Image();
         imgEl.src = img.src;
         await new Promise(resolve => imgEl.onload = resolve);
         tempCtx.drawImage(imgEl, 0, 0, canvas.width, canvas.height);
 
-        // Draw annotations
         tempCtx.drawImage(canvas, 0, 0);
+        tempCtx.drawImage(devImg, canvas.width - 90, canvas.height - 90, 80, 80);
 
         if (i !== 0) pdf.addPage();
         pdf.addImage(tempCanvas.toDataURL("image/png"), "PNG", 0, 0, canvas.width, canvas.height);
